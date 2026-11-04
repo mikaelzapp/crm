@@ -2,9 +2,15 @@
 
 CRM em português brasileiro para importar empresas, registrar autorizações, centralizar atendimento e executar campanhas pela API oficial da WhatsApp Business Platform. O backend persiste dados no PostgreSQL com pgvector; o worker BullMQ usa Redis para executar os envios. O modo de teste é explícito e não contata a Meta.
 
+## Tutorial de instalação
+
+Abra a tela **Instalação** em `/instalacao` ou consulte o [tutorial ilustrado completo](docs/tutorial-instalacao.md). Há passos e comandos para Windows 11, Linux, TrueNAS SCALE e macOS, com capturas da interface e solução de problemas. As imagens usam dados fictícios.
+
+Para obter o projeto, use [GitHub](https://github.com/mikaelzapp/crm) ou o [ZIP da branch main](https://github.com/mikaelzapp/crm/archive/refs/heads/main.zip). O fluxo Docker do tutorial dispensa Node instalado no host.
+
 ## Iniciar com Docker
 
-Requisitos: Docker Engine com Compose v2 ou Docker Desktop; aproximadamente 4 GB de memória disponíveis para build e serviços. Em Windows 11, use Docker Desktop com WSL2 e contêineres Linux.
+Requisitos: Docker Engine com Compose v2 ou Docker Desktop; planeje 8 GB de RAM para CRM e serviços, ou 16 GB ou mais ao usar IA com modelo de 4B; o consumo depende da configuração. Em Windows 11, use Docker Desktop com WSL2 e contêineres Linux.
 
 ```sh
 # A partir da raiz deste repositório; Node 22+ necessário apenas para este gerador.

@@ -1,47 +1,60 @@
-# Windows 11, TrueNAS SCALE e nuvem
+# Instalação e implantação
 
-## Windows 11
+O [tutorial ilustrado de instalação](tutorial-instalacao.md) reúne os passos para **Windows 11, Linux, TrueNAS SCALE e macOS**, com comandos copiáveis e capturas do CRM. O mesmo conteúdo de orientação está disponível na tela pública **Instalação** do aplicativo, em `/instalacao`, inclusive antes do login.
 
-1. Instale WSL2 e Docker Desktop com contêineres Linux. Abra Docker Desktop e aguarde o daemon estar disponível.
-2. Coloque o repositório em uma pasta local; evite edição simultânea do banco/volumes pelo host.
-3. Execute `instalar.bat`. O PowerShell gera `.env` apenas se ele não existir; não imprime os segredos. Se a política do computador impedir o script, crie `.env` manualmente conforme `.env.example` e execute `docker compose up -d --build`.
-4. Aguarde `docker compose ps` mostrar web saudável. Acesse a porta 3000 e use as credenciais locais em `.env`.
-5. Para retomar depois de reiniciar o Windows, inicie Docker Desktop e execute `iniciar.bat`.
+Repositório: https://github.com/mikaelzapp/crm. Alternativa: [ZIP da branch main](https://github.com/mikaelzapp/crm/archive/refs/heads/main.zip).
 
-Não é necessário instalar PostgreSQL, Redis ou Node no Windows para usar os scripts `.bat`. O script de geração alternativo `.mjs` requer Node 22+.
+## Pré-requisitos comuns
+
+Use Docker Engine/Compose v2 ou Docker Desktop com contêineres Linux. Planeje 8 GB de RAM para CRM e serviços; para IA com modelo de 4B, prefira 16 GB ou mais. Recursos efetivos variam com modelo, contexto, quantização e hardware. Ollama é opcional e nenhum peso é instalado automaticamente.
+
+O fluxo Docker não exige Node no host. O helper POSIX usa um contêiner temporário com UID/GID do operador; no Windows, `instalar.bat` usa PowerShell. Ambos preservam `.env` existente. Leia as credenciais no arquivo usando editor local, sem publicá-las em logs ou no Git.
+
+## Rede e HTTPS
+
+A configuração padrão publica somente web em `127.0.0.1:3000`. PostgreSQL/pgvector e Redis permanecem na rede interna. Para acesso LAN, configure `BIND_ADDRESS` adequadamente e `APP_URL` com a origem que o navegador usará. Para acesso público, use proxy reverso com certificado HTTPS válido.
+
+`APP_URL`, host e protocolo devem corresponder à origem do navegador, pois o CRM verifica a origem das mutações. A Meta precisa alcançar `/api/webhooks/whatsapp` publicamente por HTTPS. Os detalhes estão no [guia da Meta](meta.md).
+
+`docker-compose.dev.yml` expõe banco e Redis somente em loopback para desenvolvimento e, se o perfil Ollama estiver ativo, publica 11434 também em loopback. O override não é necessário para executar tudo dentro do Compose.
 
 ## TrueNAS SCALE
 
-Use uma versão do TrueNAS SCALE com suporte a aplicativos Docker/Compose. Versões antigas com outro orquestrador exigem migração ou implantação equivalente; este repositório não fornece charts Kubernetes.
+Use uma versão com backend Docker/Apps, como 24.10 ou posterior, e confira a documentação da sua versão. Prepare datasets e ACLs pela interface do appliance. Não instale Docker ou pacotes via `apt` no TrueNAS.
 
-1. Mantenha o código em dataset dedicado, fora de diretórios públicos. Use o shell com Compose disponível ou a opção de aplicativo personalizado por YAML oferecida pela sua versão.
-2. Configure os valores de `.env` no mecanismo de variáveis/segredos de sua instalação. Não cole senhas em URLs públicas, tickets ou logs.
-3. Construa a imagem no host com `docker compose build` ou distribua uma imagem construída por CI em registro privado. A opção YAML do TrueNAS pode exigir `image:` pré-construída em vez de `build:`.
-4. Preserve volumes PostgreSQL e Redis. Se substituir volumes nomeados por datasets bind-mounted, configure ownership/ACL para os usuários efetivos das imagens; PostgreSQL 16 usa `/var/lib/postgresql/data`. Não copie um datadir vivo como se fosse um backup consistente.
-5. O vínculo padrão `127.0.0.1:3000` permite proxy reverso no mesmo host. Para acesso direto da rede, configure `BIND_ADDRESS` com o endereço LAN desejado e restrinja o acesso no firewall. Não publique as portas de PostgreSQL/Redis.
-6. Use proxy reverso com HTTPS e `APP_URL=https://seu-dominio`. Encaminhe o host e o protocolo de forma coerente. A Meta precisa alcançar a rota de webhook publicamente por HTTPS.
-7. Configure uma política de snapshots de datasets e backups lógicos. Teste uma restauração em ambiente separado antes de depender deles.
+O tutorial usa Shell/Compose quando disponível. A interface de aplicativo personalizado por YAML pode exigir `image:` pré-construída em registro em vez de `build:`. Não trate o YAML deste repositório como construção automática garantida em qualquer versão do painel.
 
-`docker-compose.dev.yml` abre banco e Redis apenas em loopback para desenvolvimento; não é necessário no servidor. O redirecionamento de portas e a emissão de certificados dependem da rede do usuário e não são provisionados pelo CRM.
+Preserve o nome do projeto Compose `crm-whatsapp` e os volumes de dados. Se preferir datasets bind-mounted, configure ownership/ACL para os usuários efetivos das imagens. A imagem `pgvector/pgvector:pg16` mantém a major 16 do PostgreSQL e oferece a extensão exigida pelas migrations de IA. Uma troca de major exige plano de migração próprio.
 
 ## Nuvem gerenciada Codex
 
-Cada tarefa já usa um ambiente isolado. Use `/workspace/crm` existente; não crie worktrees para a configuração usual.
+Cada tarefa já usa ambiente isolado. Use o checkout existente em `/workspace/crm`; não crie worktrees para a configuração usual.
 
-Acesso externo usa o proxy e a CA da plataforma. Preserve `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` e os mecanismos de autenticação injetados. A CA não deve ser copiada para camadas da imagem e as verificações TLS devem permanecer habilitadas.
+A rede externa usa o proxy e a CA da plataforma. Preserve `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, autenticação injetada e verificações TLS. A CA não deve ser copiada para camadas da imagem.
 
-Para build com certificado da sessão, quando disponibilizado como `CODEX_PROXY_CERT`:
+Quando `CODEX_PROXY_CERT` estiver disponível:
 
-```sh
+```bash
 docker compose -f docker-compose.yml -f docker-compose.cloud.yml build
-# A mesma composição monta a CA no runtime para as chamadas oficiais.
 docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d
 ```
 
-O override fornece `proxy_ca` como BuildKit secret e arquivo somente leitura no runtime. A configuração padrão do Docker da plataforma precisa fornecer o endereço de proxy acessível aos contêineres; não substitua o proxy por uma rota direta. Para desenvolvimento no host, use a confiança TLS já configurada e as variáveis herdadas.
+Para incluir o serviço Ollama opcional:
 
-Redes restritas precisam permitir os registros de pacotes usados no build e `graph.facebook.com` para integração real. A lista de domínios deve ser alterada pela configuração suportada da plataforma. O modo mock não precisa alcançar a Meta. Não declare a API real testada apenas porque a rede ou o build funcionaram.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml --profile ollama up -d ollama
+```
 
-## Atualização e rollback
+O override fornece a CA como BuildKit secret nos builds e arquivo somente leitura no runtime. Ollama usa `SSL_CERT_FILE` para os downloads; Node usa `NODE_EXTRA_CA_CERTS`. O healthcheck e os comandos CLI do Ollama usam explicitamente loopback para falar com seu próprio servidor, mantendo proxy/TLS no tráfego externo de modelos.
 
-Faça backup antes de atualizar. Preserve `.env`, `ENCRYPTION_KEY` e volumes. Atualize o código ou a tag da imagem, execute `docker compose up -d --build` e verifique saúde e logs sem publicar segredos. Migrations são aplicadas pelo web; confirme a compatibilidade do schema antes de voltar para uma versão antiga. Migrations não são automaticamente revertidas por trocar a imagem.
+A rede precisa permitir os registros de pacotes usados no build e `graph.facebook.com` para a integração Meta real. Modelos Ollama precisam do registro e dos destinos de distribuição utilizados, incluindo `registry.ollama.ai` quando esse for o registro consultado. Use a configuração suportada da plataforma; não contorne uma negação de política com acesso direto ou TLS desabilitado.
+
+Uma API Ollama respondendo com lista vazia comprova disponibilidade do servidor, não a instalação de modelos ou inferência real. Consulte [Ollama](ollama.md) e [Validação](validacao.md) para os resultados efetivamente observados.
+
+## Atualização e recuperação
+
+Faça backup antes de atualizar. Preserve `.env`, `ENCRYPTION_KEY`, nome do projeto Compose e volumes. Atualize o código ou a imagem e execute `docker compose up -d --build`; depois confira saúde e logs sem divulgar segredos.
+
+O web aplica migrations ao iniciar. Trocar a imagem para uma versão antiga não reverte migrations automaticamente. Verifique compatibilidade do schema antes de um rollback. Teste restauração em ambiente separado e mantenha backups fora do host conforme sua política.
+
+Os detalhes de backup, restauração, retenção e exclusão estão no [guia de segurança](seguranca.md).

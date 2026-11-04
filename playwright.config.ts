@@ -5,7 +5,7 @@ if (existsSync('.env')) process.loadEnvFile('.env');
 const systemChromium = ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find(existsSync);
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['browser.spec.ts', 'ai-browser.spec.ts'],
+  testMatch: ['browser.spec.ts', 'ai-browser.spec.ts', 'installation.spec.ts'],
   fullyParallel: false,
   workers: 1,
   timeout: 90000,

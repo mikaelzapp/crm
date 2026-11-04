@@ -27,7 +27,7 @@ RUN npm prune --omit=dev --ignore-scripts --offline --no-audit --no-fund \
     && cp -a .next/standalone/. /opt/crm-runtime/ \
     && cp -a node_modules /opt/crm-runtime/ \
     && cp -a .next/static /opt/crm-runtime/.next/static \
-    && cp -a prisma src scripts tsconfig.json package.json /opt/crm-runtime/ \
+    && cp -a prisma src scripts public tsconfig.json package.json /opt/crm-runtime/ \
     && chmod 0555 /opt/crm-runtime/scripts/entrypoint.sh
 
 FROM base AS runtime
