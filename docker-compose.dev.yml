@@ -1,0 +1,12 @@
+# Serviços de dados para npm run dev / npm run worker no host.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+  # Exposição somente em loopback para Next/worker executados no host.
+  ollama:
+    ports:
+      - "127.0.0.1:11434:11434"

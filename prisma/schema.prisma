@@ -1,0 +1,400 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "client"
+  output = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String @id @default(cuid())
+  email        String @unique
+  name         String @default("Usuário")
+  passwordHash String
+  role         String @default("AGENT")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  sessions     Session[]
+  conversations Conversation[]
+  notes        Note[]
+  auditLogs    AuditLog[]
+}
+
+model Session {
+  id        String @id @default(cuid())
+  tokenHash String @unique
+  expiresAt DateTime
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
+}
+
+model Company {
+  id        String @id @default(cuid())
+  name      String
+  legalName String?
+  cnpj      String? @unique
+  segment   String?
+  city      String?
+  state     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  contacts  Contact[]
+  @@index([city, state])
+}
+
+model Contact {
+  id           String @id @default(cuid())
+  companyId    String
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name         String
+  phone        String?
+  rawPhone     String?
+  email        String?
+  priority     String?
+  messageDraft String?
+  originalData Json @default("{}")
+  doNotContact Boolean @default(false)
+  stage        String @default("PENDING_AUTHORIZATION")
+  tags         String[] @default([])
+  potentialValueCents Int @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  consents     Consent[]
+  conversations Conversation[]
+  recipients   Recipient[]
+  notes        Note[]
+  tasks        Task[]
+  importRows   ImportRow[]
+  messageDraftVersions MessageDraftVersion[]
+  @@unique([companyId, phone])
+  @@index([phone])
+  @@index([stage, doNotContact])
+}
+
+model Consent {
+  id        String @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  source    String
+  purpose   String
+  evidence  String
+  grantedAt DateTime @default(now())
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([contactId, revokedAt])
+}
+
+model Suppression {
+  id        String @id @default(cuid())
+  phone     String @unique
+  reason    String
+  createdAt DateTime @default(now())
+}
+
+model ImportBatch {
+  id        String @id @default(cuid())
+  fileName  String
+  columns   Json
+  total     Int @default(0)
+  created   Int @default(0)
+  updated   Int @default(0)
+  invalid   Int @default(0)
+  errors    Json @default("[]")
+  status    String @default("PROCESSING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  rows      ImportRow[]
+}
+
+model ImportRow {
+  id            String @id @default(cuid())
+  importBatchId String
+  importBatch   ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  rowNumber     Int
+  contactId     String?
+  contact       Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  originalData  Json
+  warnings      Json @default("[]")
+  createdAt     DateTime @default(now())
+  @@unique([importBatchId, rowNumber])
+}
+
+model Connection {
+  id             String @id @default(cuid())
+  name           String
+  phone          String
+  wabaId         String
+  phoneNumberId  String @unique
+  encryptedToken String?
+  enabled        Boolean @default(true)
+  status         String @default("PENDING")
+  quality        String @default("UNKNOWN")
+  mode           String @default("META")
+  ratePerMinute  Int @default(10)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  templates      Template[]
+  conversations  Conversation[]
+  campaigns      Campaign[]
+  aiAgent        AiAgent?
+}
+
+model Template {
+  id             String @id @default(cuid())
+  connectionId   String
+  connection     Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  name           String
+  language       String @default("pt_BR")
+  status         String @default("PENDING")
+  components     Json @default("[]")
+  parameterNames Json @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  campaigns      Campaign[]
+  @@unique([connectionId, name, language])
+}
+
+model Conversation {
+  id            String @id @default(cuid())
+  contactId     String
+  contact       Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  connectionId  String
+  connection    Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  assignedToId  String?
+  assignedTo    User? @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  status        String @default("PENDING")
+  lastInboundAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  messages      Message[]
+  aiPaused      Boolean @default(false)
+  aiRuns        AiRun[]
+  aiPermission  AiConversationPermission?
+  @@unique([contactId, connectionId])
+}
+
+model Message {
+  id             String @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction      String
+  type           String @default("TEXT")
+  body           String
+  status         String @default("QUEUED")
+  externalId     String? @unique
+  idempotencyKey String? @unique
+  error          String?
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  recipients     Recipient[]
+  @@index([conversationId, createdAt])
+}
+
+model Campaign {
+  id                  String @id @default(cuid())
+  name                String
+  connectionId        String
+  connection          Connection @relation(fields: [connectionId], references: [id])
+  templateId          String
+  template            Template @relation(fields: [templateId], references: [id])
+  status              String @default("DRAFT")
+  scheduledAt         DateTime?
+  maxBudgetCents      Int @default(0)
+  costPerMessageCents Int @default(0)
+  ratePerMinute       Int @default(10)
+  parameters          Json @default("{}")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  recipients          Recipient[]
+}
+
+model Recipient {
+  attempts   Int @default(0)
+  id         String @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId  String
+  contact    Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status     String @default("PENDING")
+  messageId  String?
+  message    Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([campaignId, contactId])
+}
+
+model Note {
+  id        String @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User @relation(fields: [authorId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id        String @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  title     String
+  dueAt     DateTime?
+  completed Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String @id @default(cuid())
+  userId    String?
+  user      User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entityId  String?
+  metadata  Json @default("{}")
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+
+model Setting {
+  id        String @id @default(cuid())
+  key       String @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model MessageDraftVersion {
+  id        String @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  body      String
+  authorId  String?
+  createdAt DateTime @default(now())
+  @@index([contactId, createdAt])
+}
+
+model AiAgent {
+  id                 String @id @default(cuid())
+  connectionId       String @unique
+  connection         Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  name               String
+  mode               String @default("OFF")
+  model              String @default("qwen3.5:4b")
+  embeddingModel     String?
+  instructions       String @default("")
+  faqs               Json @default("[]")
+  services           Json @default("[]")
+  prices             Json @default("[]")
+  retainHistory      Boolean @default(false)
+  maxHistoryMessages Int @default(10)
+  timeoutSeconds     Int @default(60)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  sources            KnowledgeSource[]
+  chunks             KnowledgeChunk[]
+  runs               AiRun[]
+  corrections        AiCorrection[]
+}
+
+model KnowledgeSource {
+  id             String @id @default(cuid())
+  agentId        String
+  agent          AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  title          String
+  type           String @default("TEXT")
+  content        String
+  status         String @default("PENDING")
+  error          String?
+  approved       Boolean @default(false)
+  embeddingModel String?
+  dimensions     Int?
+  contentHash    String
+  indexedHash    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  chunks         KnowledgeChunk[]
+  @@index([agentId, status])
+}
+
+model KnowledgeChunk {
+  id             String @id @default(cuid())
+  sourceId       String
+  source         KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  agentId        String
+  agent          AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  content        String
+  position       Int
+  embedding      Unsupported("vector")?
+  embeddingModel String
+  dimensions     Int
+  contentHash    String
+  createdAt      DateTime @default(now())
+  @@unique([sourceId, position])
+  @@index([agentId, embeddingModel, dimensions])
+}
+
+model AiRun {
+  id                String @id @default(cuid())
+  agentId           String
+  agent             AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversationId    String?
+  conversation      Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  triggerMessageId  String? @unique
+  origin            String @default("TEST")
+  input             String
+  output            String?
+  status            String @default("QUEUED")
+  mode              String
+  intent            String?
+  reason            String?
+  error             String?
+  sources           Json @default("[]")
+  retainHistory     Boolean @default(false)
+  claimedAt         DateTime?
+  expiresAt         DateTime?
+  outboundMessageId String? @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  corrections       AiCorrection[]
+  @@index([agentId, createdAt])
+  @@index([status, claimedAt])
+  @@index([expiresAt])
+}
+
+model AiCorrection {
+  id              String @id @default(cuid())
+  agentId         String
+  agent           AiAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  runId           String
+  run             AiRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  originalAnswer  String
+  correctedAnswer String
+  question        String
+  status          String @default("PENDING")
+  sourceId        String?
+  approvedById    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([agentId, status])
+}
+
+model AiConversationPermission {
+  id             String @id @default(cuid())
+  conversationId String @unique
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  allowed        Boolean @default(false)
+  source         String
+  purpose        String
+  evidence       String?
+  grantedAt      DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

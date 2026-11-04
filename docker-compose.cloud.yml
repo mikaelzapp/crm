@@ -1,0 +1,26 @@
+# Uso apenas na nuvem gerenciada, com CA pública do proxy fornecida pela plataforma.
+services:
+  web:
+    build:
+      secrets:
+        - proxy_ca
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/secrets/proxy_ca
+    secrets:
+      - proxy_ca
+  worker:
+    build:
+      secrets:
+        - proxy_ca
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/secrets/proxy_ca
+    secrets:
+      - proxy_ca
+  ollama:
+    environment:
+      SSL_CERT_FILE: /run/secrets/proxy_ca
+    secrets:
+      - proxy_ca
+secrets:
+  proxy_ca:
+    file: ${CODEX_PROXY_CERT:?Certificado CA do proxy da plataforma indisponivel}

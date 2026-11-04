@@ -1,0 +1,111 @@
+name: crm-whatsapp
+x-app: &app
+  image: crm-whatsapp:local
+  build:
+    context: .
+  restart: unless-stopped
+  init: true
+  environment: &app-environment
+    NODE_ENV: production
+    DATABASE_URL: postgresql://crm:${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD no .env}@postgres:5432/crm?schema=public
+    REDIS_URL: redis://redis:6379
+    APP_URL: ${APP_URL:-http://localhost:3000}
+    ADMIN_EMAIL: ${ADMIN_EMAIL:?Configure ADMIN_EMAIL no .env}
+    ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Configure ADMIN_PASSWORD no .env}
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Configure ENCRYPTION_KEY no .env}
+    WHATSAPP_MODE: ${WHATSAPP_MODE:-mock}
+    MOCK_WHATSAPP_ENABLED: ${MOCK_WHATSAPP_ENABLED:-false}
+    META_API_VERSION: ${META_API_VERSION:-v23.0}
+    META_APP_SECRET: ${META_APP_SECRET:-}
+    META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-}
+    # Host/npm usa OLLAMA_BASE_URL; dentro do Compose use a URL da rede Docker.
+    OLLAMA_BASE_URL: ${OLLAMA_DOCKER_BASE_URL:-http://ollama:11434}
+    OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-60000}
+    OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}
+    OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: crm
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD no .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+  redis:
+    image: redis:7-bookworm
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+  web:
+    <<: *app
+    command: ["web"]
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 12
+  worker:
+    <<: *app
+    command: ["worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+  # Opcional: docker compose --profile ollama up -d ollama
+  # Modelos são baixados explicitamente pelo operador; nenhum pull de pesos no boot.
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    profiles: ["ollama"]
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "env", "OLLAMA_HOST=http://127.0.0.1:11434", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_models:

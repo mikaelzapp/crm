@@ -1,0 +1,65 @@
+{
+  "name": "crm-multi-whatsapp-pro",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "npm run db:generate && next build",
+    "start": "next start --hostname 0.0.0.0",
+    "worker": "node --env-file-if-exists=.env --import tsx src/worker.ts",
+    "db:generate": "node --import tsx scripts/generate-client.ts",
+    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.mjs",
+    "db:seed": "node --env-file-if-exists=.env --import tsx prisma/seed.ts",
+    "test": "vitest run",
+    "test:integration": "node --env-file-if-exists=.env --import tsx tests/integration.ts",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "test:api": "node --env-file-if-exists=.env --import tsx tests/api.integration.ts",
+    "test:ai:knowledge": "node --env-file-if-exists=.env --import tsx tests/knowledge.integration.ts",
+    "test:ai:runtime": "node --env-file-if-exists=.env --import tsx tests/ai-runtime.integration.ts",
+    "test:ai:api": "node --env-file-if-exists=.env --import tsx tests/ai-api.integration.ts",
+    "test:ai:documents": "node --env-file-if-exists=.env --import tsx tests/documents.integration.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "6.19.0",
+    "@prisma/client": "6.19.0",
+    "bcryptjs": "^3.0.2",
+    "bullmq": "^5.61.0",
+    "csv-parse": "^7.0.3",
+    "exceljs": "^4.4.0",
+    "ioredis": "^5.8.1",
+    "libphonenumber-js": "^1.12.0",
+    "lucide-react": "^0.468.0",
+    "mammoth": "^1.13.0",
+    "next": "^16.0.0",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.23.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tsx": "^4.20.0",
+    "undici": "^7.16.0",
+    "yauzl": "^3.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@prisma/internals": "6.19.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/yauzl": "^3.4.0",
+    "prisma": "6.19.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2",
+      "effect": "3.22.4"
+    },
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
+  }
+}
